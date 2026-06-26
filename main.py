@@ -538,30 +538,69 @@ class FreeFireChecker:
             'legendary': Fore.LIGHTYELLOW_EX,
         }
 
-    def _get_fresh_token(self):
-        """Lấy token mới từ trang web"""
+    def _get_token_from_github(self):
+        """Hàm lấy token từ GitHub"""
+        url = "https://raw.githubusercontent.com/tantinh202408-alt/checker/refs/heads/main/main-token.txt"
         try:
-            print(f"{Fore.YELLOW}🔄 Đang lấy token mới...")
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                return response.text.strip()
+        except Exception as e:
+            print(f"{Fore.RED}❌ Lỗi lấy token từ GitHub: {e}", file=sys.stderr)
+        return None
+
+    def _get_fresh_token(self):
+        """Lấy token mới từ file token.txt, GitHub hoặc yêu cầu nhập thủ công"""
+        token_file = "token.txt"
+        
+        # 1. Thử đọc từ file local trước
+        if os.path.exists(token_file):
+            try:
+                with open(token_file, 'r', encoding='utf-8') as f:
+                    token = f.read().strip()
+                    if token:
+                        self.token = token
+                        print(f"{Fore.GREEN}✅ Đã nạp token từ {token_file}", file=sys.stderr)
+                        return token
+            except Exception as e:
+                print(f"{Fore.RED}❌ Lỗi đọc file token.txt: {e}", file=sys.stderr)
+
+        # 2. Thử lấy từ GitHub
+        try:
+            token = self._get_token_from_github()
+            if token:
+                self.token = token
+                # Lưu vào file token.txt để cache
+                with open(token_file, 'w', encoding='utf-8') as f:
+                    f.write(token)
+                print(f"{Fore.GREEN}✅ Đã nạp token từ GitHub", file=sys.stderr)
+                return token
+        except Exception as e:
+            print(f"{Fore.RED}❌ Lỗi lấy token từ GitHub: {e}", file=sys.stderr)
+
+        # 3. Nếu không có file hoặc đọc lỗi, yêu cầu nhập thủ công từ bàn phím
+        # Sử dụng sys.stderr để in thông báo để tránh ảnh hưởng đến stdout của API/CLI
+        print(f"\n{Fore.YELLOW}⚠️ Token hết hạn hoặc không tìm thấy!", file=sys.stderr)
+        sys.stderr.write(f"{Fore.GREEN}🔑 Vui lòng nhập Token Free Fire mới: {Fore.CYAN}")
+        sys.stderr.flush()
+        
+        try:
+            token = sys.__stdin__.readline().strip()
+        except Exception:
+            token = input().strip()
             
-            # Truy cập trang chính để lấy cookies
-            login_url = "https://developers.freefirecommunity.com/vi/login"
-            response = self.session.get(login_url, timeout=10)
-            
-            if response.status_code != 200:
-                print(f"{Fore.RED}❌ Không thể truy cập trang login")
-                return None
-            
-            # Thử lấy token từ localStorage pattern (token thường được nhúng trong HTML)
-            # Đây là token mẫu - bạn cần thay bằng token thực tế
-            token = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjJmMjk1MGEyNGFlYWRkMjYzYzIxM2I2MDNhZjMxNWEzMjdiNmM3MjAiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiVGluaCBUYW4iLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jS3NkcHZmZmU4NjhKWVBBZUp1aDg2YVJiVTFyVmNpaFJYd0RJTXdXTkpHb0FKUE9RPXM5Ni1jIiwiaXNzIjoiaHR0cHM6Ly9zZWN1cmV0b2tlbi5nb29nbGUuY29tL3N0dWRpby02MDU0ODE0NjQxLWE0N2U1IiwiYXVkIjoic3R1ZGlvLTYwNTQ4MTQ2NDEtYTQ3ZTUiLCJhdXRoX3RpbWUiOjE3ODIzOTI1NDEsInVzZXJfaWQiOiJZSzcwYktBaTJlWksxQ2V1U2NVNFpuUkp6NUMzIiwic3ViIjoiWUs3MGJLQWkyZVpLMUNldVNjVTRablJKejVDMyIsImlhdCI6MTc4MjQ0Mzk4MCwiZXhwIjoxNzgyNDQ3NTgwLCJlbWFpbCI6InRhbnRpbmgyMDI0MDhAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZ29vZ2xlLmNvbSI6WyIxMDY1NTkyOTI5MTcxNDgxNzQ1NTgiXSwiZW1haWwiOlsidGFudGluaDIwMjQwOEBnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJnb29nbGUuY29tIn19.XkcRg3K28EV2d5ImeR7Tj1a0H6UamT6OgWaC4ssh0-JANUQZ7HXZbnGHtY33_u7ETJ-1-ss3_pq_zSa2uY_OxGArP4vu4L1yO4HbVVrXyAd6E182UlQgD4WDSntzr9gCO30q_duLe-3zGS4trg2VxHr7xr6NEBSFUxb8hVQu477Ar_yjbk1NBX-D9wqmkozuBOMuxZVoS587zZMW6cn7p6bfcJ3o1fReAv6RTic8jgW89WD-CrEN3fyV-h3hXDLmsi3Z_svkD3kZAKNdBVIlFu0oxsUT_EuPxKf2Dnpu-fvQvET83ECQ9-DXKTwVtBuUPuS0EiYYY96vT0MvpMWCww"
-            
+        if token:
             self.token = token
-            print(f"{Fore.GREEN}✅ Token đã được cập nhật")
+            # Lưu lại vào file cho lần sau
+            try:
+                with open(token_file, 'w', encoding='utf-8') as f:
+                    f.write(token)
+                print(f"{Fore.GREEN}✅ Đã lưu token mới vào {token_file}", file=sys.stderr)
+            except Exception as e:
+                print(f"{Fore.RED}❌ Lỗi lưu token vào file: {e}", file=sys.stderr)
             return token
             
-        except Exception as e:
-            print(f"{Fore.RED}❌ Lỗi khi lấy token: {e}")
-            return None
+        return None
 
     def _make_request(self, uid, region='sg'):
         """Thực hiện request với retry khi token hết hạn"""
@@ -597,12 +636,17 @@ class FreeFireChecker:
                 
                 # Nếu token hết hạn (401)
                 if response.status_code == 401:
-                    print(f"{Fore.YELLOW}⚠️ Token hết hạn, đang lấy token mới...")
+                    print(f"{Fore.YELLOW}⚠️ Token hết hạn, đang xóa file token cũ và yêu cầu nhập lại...", file=sys.stderr)
+                    if os.path.exists("token.txt"):
+                        try:
+                            os.remove("token.txt")
+                        except:
+                            pass
                     self.token = None  # Reset token
                     if attempt < max_retries - 1:
                         continue  # Thử lại
                     else:
-                        print(f"{Fore.RED}❌ Không thể lấy token mới sau {max_retries} lần thử")
+                        print(f"{Fore.RED}❌ Không thể lấy token mới sau {max_retries} lần thử", file=sys.stderr)
                         return None
                 
                 # Request thành công
